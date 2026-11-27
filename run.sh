@@ -17,7 +17,16 @@ warn() { printf '  %s!%s %s\n' "$yellow" "$reset" "$*"; }
 fail() { printf '  %s✗%s %s\n' "$red" "$reset" "$*"; }
 
 # ---------------------------------------------------------------- dependencies
-APT_PKGS="python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client"
+# The Qt SVG icon plugin is packaged as qt6-svg-plugins on Ubuntu 25.04+
+# and as libqt6svg6 on Ubuntu 24.04.
+svg_pkg() {
+    if command -v apt-cache >/dev/null 2>&1 && apt-cache show qt6-svg-plugins >/dev/null 2>&1; then
+        echo qt6-svg-plugins
+    else
+        echo libqt6svg6
+    fi
+}
+APT_PKGS="python3 python3-pyqt6 python3-paramiko $(svg_pkg) openssh-client"
 
 check_deps() {
     local missing=()

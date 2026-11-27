@@ -17,16 +17,23 @@ ICON_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/scalable/apps"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/BitTwin"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/BitTwin"
 
-bold=$'\e[1m'; green=$'\e[32m'; red=$'\e[31m'; yellow=$'\e[33m'; reset=$'\e[0m'
+bold=$'\e[1m'; green=$'\e[32m'; red=$'\e[31m'; reset=$'\e[0m'
 say()  { printf '%s\n' "${bold}BitTwin${reset}  $*"; }
 ok()   { printf '  %s✓%s %s\n' "$green" "$reset" "$*"; }
 fail() { printf '  %s✗%s %s\n' "$red" "$reset" "$*"; }
 
 refresh_menus() {
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database -q "$DESKTOP_DIR" 2>/dev/null || true
-    command -v gtk-update-icon-cache  >/dev/null 2>&1 && gtk-update-icon-cache -q -t "${ICON_DIR%/scalable/apps}" 2>/dev/null || true
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database -q "$DESKTOP_DIR" 2>/dev/null || true
+    fi
+    if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+        gtk-update-icon-cache -q -t "${ICON_DIR%/scalable/apps}" 2>/dev/null || true
+    fi
     for k in kbuildsycoca6 kbuildsycoca5; do
-        command -v "$k" >/dev/null 2>&1 && { "$k" --noincremental >/dev/null 2>&1 || true; break; }
+        if command -v "$k" >/dev/null 2>&1; then
+            "$k" --noincremental >/dev/null 2>&1 || true
+            break
+        fi
     done
 }
 
@@ -57,7 +64,16 @@ esac
 say "installing for user $(id -un)"
 
 # ---------------------------------------------------------------- dependencies
-APT_PKGS="python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client"
+# The Qt SVG icon plugin is packaged as qt6-svg-plugins on Ubuntu 25.04+
+# and as libqt6svg6 on Ubuntu 24.04.
+svg_pkg() {
+    if command -v apt-cache >/dev/null 2>&1 && apt-cache show qt6-svg-plugins >/dev/null 2>&1; then
+        echo qt6-svg-plugins
+    else
+        echo libqt6svg6
+    fi
+}
+APT_PKGS="python3 python3-pyqt6 python3-paramiko $(svg_pkg) openssh-client"
 if ! python3 -c 'import PyQt6.QtWidgets, paramiko' 2>/dev/null; then
     fail "BitTwin needs the Qt and SSH libraries that ship with Ubuntu/Kubuntu."
     echo

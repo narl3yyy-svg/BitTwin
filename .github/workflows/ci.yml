@@ -25,8 +25,10 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           apt-get update
+          if apt-cache show qt6-svg-plugins >/dev/null 2>&1; then SVG=qt6-svg-plugins; else SVG=libqt6svg6; fi
+          echo "SVG plugin package: $SVG"
           apt-get install -y --no-install-recommends git ca-certificates \
-            python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client
+            python3 python3-pyqt6 python3-paramiko "$SVG" openssh-client
       - uses: actions/checkout@v4
       - name: Run the test suite (engine, SFTP, security, headless GUI)
         env:
@@ -39,11 +41,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: ShellCheck (run.sh, install.sh, tools/)
-        run: shellcheck run.sh install.sh tools/*.sh
+        run: |
+          # Findings are also turned into annotations so they are visible without signing in.
+          if ! shellcheck -f gcc run.sh install.sh tools/*.sh > shellcheck.txt; then
+            sed -E 's/^([^:]+):([0-9]+):([0-9]+): ([a-z]+): (.*)$/::error file=\1,line=\2,col=\3::\5/' shellcheck.txt
+            exit 1
+          fi
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - name: Bandit (Python security scanner)
         run: |
           python -m pip install --quiet bandit
-          bandit -r bittwin --severity-level medium --confidence-level medium
+          if ! bandit -r bittwin --severity-level medium --confidence-level medium -f custom \
+              --msg-template '::error file={relpath},line={line}::{test_id} {msg}'; then
+            exit 1
+          fi

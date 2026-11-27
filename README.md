@@ -112,7 +112,11 @@ The installer runs the self-tests first, then adds:
 <summary><b>Dependencies</b> (installed automatically if missing)</summary>
 
 ```bash
+# Ubuntu / Kubuntu 25.04 and newer
 sudo apt install python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client
+
+# Ubuntu / Kubuntu 24.04 LTS
+sudo apt install python3 python3-pyqt6 python3-paramiko libqt6svg6 openssh-client
 ```
 
 </details>
