@@ -113,10 +113,10 @@ The installer runs the self-tests first, then adds:
 
 ```bash
 # Ubuntu / Kubuntu 25.04 and newer
-sudo apt install python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client
+sudo apt install python3 python3-pyqt6 python3-paramiko python3-keyring qt6-svg-plugins openssh-client
 
 # Ubuntu / Kubuntu 24.04 LTS
-sudo apt install python3 python3-pyqt6 python3-paramiko libqt6svg6 openssh-client
+sudo apt install python3 python3-pyqt6 python3-paramiko python3-keyring libqt6svg6 openssh-client
 ```
 
 </details>
@@ -170,6 +170,7 @@ Click **SFTP…** on either side:
 | **Sign in with** | **Private key file** (recommended) or **Password** |
 | **Key file** | Your **private** key, e.g. `~/.ssh/id_ed25519` (not the `.pub` file). Ed25519, ECDSA and RSA keys are supported |
 | **Key passphrase** | The passphrase that unlocks the key. Leave it empty if the key has none |
+| **Save passphrase in KDE Wallet** | Optional. Tick it so you don't have to type the passphrase every time (see below) |
 | **Remote folder** | The folder on the server. Click **Browse…** to pick it from the server's folders |
 
 - **Test connection** checks everything before you use it.
@@ -178,8 +179,15 @@ Click **SFTP…** on either side:
   and keys from your `~/.ssh/known_hosts` are recognised too.
 - If a server's key **changes**, BitTwin **refuses to connect** and warns you (possible
   man-in-the-middle).
-- **Your passphrase and password are never saved to disk.** They stay in memory until you
-  close BitTwin. Saved connections only remember the host, port, user, key path and folder.
+- **Your passphrase is only saved if you ask.** By default it stays in memory until you close
+  BitTwin. If you tick **Save passphrase in KDE Wallet**, it's stored **encrypted in KDE Wallet**
+  (or GNOME Keyring on GNOME), the same place your desktop keeps Wi-Fi and browser passwords.
+  BitTwin's own settings file only ever holds the host, port, user, key path and folder.
+  - It's saved only after a connection with it **succeeds**, so a typo is never stored.
+  - **Untick** the box and press *Use this server* to delete it from the wallet again.
+  - You can also see or remove it in **KDE Wallet Manager** under *BitTwin SFTP*.
+  - If no secure password store is available, the option is greyed out. BitTwin never
+    falls back to saving secrets as plain text.
 - Copies to and from SFTP are verified by **reading the uploaded file back over the
   connection** and comparing SHA-256 hashes. BitTwin also asks the server to `fsync` the
   file (OpenSSH supports this).
@@ -239,7 +247,7 @@ BitTwin is designed to be safe to run on your own files:
 | **Stays in its lane** | Only reads and writes inside the two folders you choose. File names from servers are validated (`/`, `..` and similar tricks are rejected), symbolic links are never followed, and BitTwin refuses to write through a folder that is a symbolic link. |
 | **No phoning home** | No telemetry, no update checks, no accounts, no background service. The only network connections are to SFTP servers you add. |
 | **No root** | Runs as your user. `install.sh` installs into your home folder and **asks first** before using `sudo apt` for missing Ubuntu packages. |
-| **Secrets stay secret** | SSH passphrases and passwords are kept in memory only. Settings, logs and sync history are private to your account (`0700` / `0600`). |
+| **Secrets stay secret** | SSH passphrases and passwords stay in memory, unless you choose to save them **encrypted in KDE Wallet / GNOME Keyring**. They're never written to BitTwin's own files. Settings, logs and sync history are private to your account (`0700` / `0600`). |
 | **Server identity** | You confirm a new SFTP server's fingerprint once. If it ever changes, BitTwin refuses to connect. |
 | **Safe display** | File names are always shown as plain text, so a crafted name can't inject content into the window. |
 | **Checked on every change** | The [test suite](tests/) (including attack tests: malicious SFTP server, symlink escapes, crafted names) runs on Ubuntu 24.04 and 26.04, along with **CodeQL**, **Bandit** and **ShellCheck**. Results are public in the [Actions tab](https://github.com/narl3yyy-svg/BitTwin/actions). |

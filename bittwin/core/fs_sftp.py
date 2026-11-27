@@ -74,9 +74,10 @@ class SFTPConfig:
     username: str = ""
     auth: str = "key"           # "key" or "password"
     key_path: str = ""
-    passphrase: str = ""        # unlocks the private key; never written to disk
-    password: str = ""          # only for auth == "password"; never written to disk
+    passphrase: str = ""        # unlocks the private key; never written by BitTwin
+    password: str = ""          # only for auth == "password"; never written by BitTwin
     remote_path: str = "/"
+    remember_secret: bool = False  # passphrase/password kept in KDE Wallet / keyring
 
     @property
     def label(self) -> str:
@@ -87,7 +88,7 @@ class SFTPConfig:
         """Everything except secrets, for saving the connection."""
         return {"host": self.host, "port": self.port, "username": self.username,
                 "auth": self.auth, "key_path": self.key_path,
-                "remote_path": self.remote_path}
+                "remote_path": self.remote_path, "remember_secret": self.remember_secret}
 
 
 def load_private_key(path: str, passphrase: str) -> paramiko.PKey:

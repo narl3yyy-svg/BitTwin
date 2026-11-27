@@ -73,7 +73,7 @@ svg_pkg() {
         echo libqt6svg6
     fi
 }
-APT_PKGS="python3 python3-pyqt6 python3-paramiko $(svg_pkg) openssh-client"
+APT_PKGS="python3 python3-pyqt6 python3-paramiko python3-keyring $(svg_pkg) openssh-client"
 if ! python3 -c 'import PyQt6.QtWidgets, paramiko' 2>/dev/null; then
     fail "BitTwin needs the Qt and SSH libraries that ship with Ubuntu/Kubuntu."
     echo

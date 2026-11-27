@@ -29,7 +29,8 @@ For example:
 - BitTwin reading, writing or deleting anything **outside the two folders you chose**
 - A way for an SFTP server or a crafted file/folder name to make BitTwin do that
 - A way to make a corrupted copy pass verification
-- Passphrases, passwords or private keys being written to disk or logs
+- Passphrases, passwords or private keys being written to disk or logs (other than in
+  the desktop's encrypted password store, when the user chooses that)
 - SFTP host-key checking being bypassed
 
 ## How BitTwin protects you
@@ -44,7 +45,9 @@ For example:
 - **Verified writes.** Each copy goes to a temp file, is `fsync`ed, read back and
   SHA-256-checked, then atomically renamed into place.
 - **SFTP host keys** are confirmed on first contact. A changed key blocks the connection.
-- **Secrets stay in memory.** Key passphrases and passwords are never saved.
+- **Secrets stay in memory** unless the user ticks *Save passphrase*. Saved secrets go
+  only to the desktop's encrypted password store (KDE Wallet / GNOME Keyring via
+  `python3-keyring`), never to BitTwin's own files. Plain-text keyring backends are refused.
   Settings, logs and sync history are readable by your account only (`0700`/`0600`).
 - **Untrusted names are shown as plain text**, never rendered as HTML.
 - Every change is checked automatically by the test suite, **CodeQL**, **Bandit** and

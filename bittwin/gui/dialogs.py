@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
                              QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
                              QRadioButton, QSpinBox, QVBoxLayout, QWidget)
 
+from ..core import secrets
 from ..core.fs_sftp import HostKeyChanged, SFTPConfig, UnknownHostKey, trust_host_key
 from ..core.model import DEFAULT_EXCLUDES, Action, CompareMethod, Options, PlanItem
 from . import theme
@@ -66,8 +67,9 @@ class SFTPDialog(QDialog):
         lay.setSpacing(12)
         title = QLabel("SFTP connection")
         title.setObjectName("SectionTitle")
-        sub = QLabel("Sync with a remote server or cloud drive over SSH. "
-                     "Your passphrase is kept in memory only and never saved.")
+        sub = QLabel("Sync with a remote server or cloud drive over SSH. Your passphrase stays "
+                     "in memory only, unless you choose to save it in your system's encrypted "
+                     "password store.")
         sub.setObjectName("Muted")
         sub.setWordWrap(True)
         lay.addWidget(title)
@@ -137,6 +139,14 @@ class SFTPDialog(QDialog):
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         form.addRow("Password", self.password)
 
+        self._store = secrets.backend_name()
+        self.save_secret = QCheckBox()
+        if not self._store:
+            self.save_secret.setEnabled(False)
+            self.save_secret.setToolTip("Needs KDE Wallet or GNOME Keyring and the python3-keyring "
+                                        "package. BitTwin never saves secrets as plain text.")
+        form.addRow("", self.save_secret)
+
         self.remote = QLineEdit("/")
         self.remote.setPlaceholderText("/home/user/backup")
         rb = QPushButton("Browse…")
@@ -147,7 +157,7 @@ class SFTPDialog(QDialog):
         form.addRow("Remote folder", rl)
         lay.addLayout(form)
 
-        self.remember = QCheckBox("Remember this connection (host, user, key path - never the passphrase)")
+        self.remember = QCheckBox("Remember this connection (host, user, key file and folder)")
         self.remember.setChecked(True)
         lay.addWidget(self.remember)
 
@@ -175,8 +185,10 @@ class SFTPDialog(QDialog):
         self._auth_changed()
         if current is not None:
             self._fill(current.public_dict())
-            self.passphrase.setText(current.passphrase)
-            self.password.setText(current.password)
+            if current.passphrase:
+                self.passphrase.setText(current.passphrase)
+            if current.password:
+                self.password.setText(current.password)
         elif self.saved:
             self.saved_box.setCurrentIndex(1)
 
@@ -186,6 +198,11 @@ class SFTPDialog(QDialog):
         self.key_row.setEnabled(key)
         self.passphrase.setEnabled(key)
         self.password.setEnabled(not key)
+        what = "passphrase" if key else "password"
+        if self._store:
+            self.save_secret.setText(f"Save {what} in {self._store} (encrypted)")
+        else:
+            self.save_secret.setText(f"Save {what} (no system password store found)")
 
     def _fill(self, d: dict):
         self.host.setText(d.get("host", ""))
@@ -194,12 +211,18 @@ class SFTPDialog(QDialog):
         (self.rb_pw if d.get("auth") == "password" else self.rb_key).setChecked(True)
         self.key.setText(d.get("key_path", ""))
         self.remote.setText(d.get("remote_path", "/") or "/")
+        keep = bool(d.get("remember_secret")) and bool(self._store)
+        self.save_secret.setChecked(keep)
+        if keep:  # fetch the saved secret from the wallet (it may ask to unlock)
+            secret = secrets.load(self.config())
+            if secret:
+                (self.passphrase if self.rb_key.isChecked() else self.password).setText(secret)
 
     def _load_saved(self, idx: int):
         if idx >= 1:
-            self._fill(self.saved[idx - 1])
             self.passphrase.clear()
             self.password.clear()
+            self._fill(self.saved[idx - 1])
             self._close_fs()
 
     def _pick_key(self):
@@ -216,7 +239,8 @@ class SFTPDialog(QDialog):
                           auth="key" if self.rb_key.isChecked() else "password",
                           key_path=self.key.text().strip(),
                           passphrase=self.passphrase.text(), password=self.password.text(),
-                          remote_path=self.remote.text().strip() or "/")
+                          remote_path=self.remote.text().strip() or "/",
+                          remember_secret=self.save_secret.isChecked() and bool(self._store))
 
     def _validate(self) -> str:
         c = self.config()
@@ -280,8 +304,19 @@ class SFTPDialog(QDialog):
         self._set_msg(f"✗  {exc}", "danger")
 
     def _accept_ok(self):
-        self.result_cfg = self.config()
-        self.result_cfg.remote_path = self._fs.root if self._fs else self.result_cfg.remote_path
+        cfg = self.config()
+        cfg.remote_path = self._fs.root if self._fs else cfg.remote_path
+        secret = cfg.passphrase if cfg.auth == "key" else cfg.password
+        if cfg.remember_secret and secret:
+            # Only reached after a successful connection, so only a working secret is saved.
+            if not secrets.save(cfg, secret):
+                cfg.remember_secret = False
+                message(self, "warning", "Could not save",
+                        f"The {'passphrase' if cfg.auth == 'key' else 'password'} could not be saved "
+                        f"in {self._store}. BitTwin will ask for it again next time.")
+        elif not cfg.remember_secret:
+            secrets.forget(cfg)  # unticked: remove any previously saved secret
+        self.result_cfg = cfg
         self._close_fs()
         self.accept()
 

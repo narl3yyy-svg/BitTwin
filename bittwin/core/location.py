@@ -26,6 +26,8 @@ class Location:
 
     def open(self):
         if self.kind == "sftp":
+            from . import secrets
             from .fs_sftp import SFTPFS
+            secrets.fill_in(self.sftp)  # saved passphrase, if the user chose to keep one
             return SFTPFS(self.sftp)
         return LocalFS(self.path)
