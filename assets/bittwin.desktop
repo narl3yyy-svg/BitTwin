@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=BitTwin
+GenericName=Folder Synchronization
+Comment=Verified, bit-for-bit folder sync between drives and SFTP servers
+Exec=@EXEC@ %F
+Icon=bittwin
+Terminal=false
+Categories=Utility;Qt;Archiving;
+Keywords=sync;mirror;backup;copy;sftp;verify;checksum;drive;
+StartupWMClass=bittwin
+StartupNotify=true
