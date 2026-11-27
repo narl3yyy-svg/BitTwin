@@ -59,7 +59,23 @@ say "installing for user $(id -un)"
 # ---------------------------------------------------------------- dependencies
 APT_PKGS="python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client"
 if ! python3 -c 'import PyQt6.QtWidgets, paramiko' 2>/dev/null; then
-    fail "Qt / SSH libraries are missing - installing: $APT_PKGS"
+    fail "BitTwin needs the Qt and SSH libraries that ship with Ubuntu/Kubuntu."
+    echo
+    echo "  These official Ubuntu packages are required:"
+    echo "      $APT_PKGS"
+    echo
+    echo "  Installing them needs administrator rights (sudo will ask for your password)."
+    if [ ! -t 0 ]; then
+        echo "  Run this first, then run ./install.sh again:"
+        echo "      sudo apt install $APT_PKGS"
+        exit 1
+    fi
+    read -r -p "  Install them now with apt? [y/N] " ans
+    if [[ ! "$ans" =~ ^[Yy]$ ]]; then
+        echo "  Nothing was installed."
+        exit 1
+    fi
+    # shellcheck disable=SC2086  # word splitting of the package list is intended
     sudo apt-get update && sudo apt-get install -y $APT_PKGS
 fi
 ok "Dependencies found"

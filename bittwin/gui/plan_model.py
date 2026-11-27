@@ -7,7 +7,7 @@ from PyQt6.QtGui import QColor, QFont
 
 from ..core.model import Action, PlanItem, Status
 from . import theme
-from .util import human_size, human_time, icon
+from .util import esc, human_size, human_time, icon
 
 COLS = ["Left", "Size", "Modified", "Action", "Right", "Size", "Modified"]
 C_LNAME, C_LSIZE, C_LTIME, C_ACTION, C_RNAME, C_RSIZE, C_RTIME = range(7)
@@ -128,11 +128,11 @@ class PlanModel(QAbstractTableModel):
             if col == C_ACTION:
                 return int(Qt.AlignmentFlag.AlignCenter)
         elif role == Qt.ItemDataRole.ToolTipRole:
-            lines = [f"<b>{it.rel}</b>", STATUS_TEXT.get(it.status, "")]
+            lines = [f"<b>{esc(it.rel)}</b>", STATUS_TEXT.get(it.status, "")]
             if it.note:
-                lines.append(it.note)
+                lines.append(esc(it.note))
             if it.error:
-                lines.append(f"<span style='color:{c['danger']}'>Error: {it.error}</span>")
+                lines.append(f"<span style='color:{c['danger']}'>Error: {esc(it.error)}</span>")
             if it.digest:
                 lines.append(f"Verified SHA-256: <code>{it.digest}</code>")
             return "<br>".join(x for x in lines if x)

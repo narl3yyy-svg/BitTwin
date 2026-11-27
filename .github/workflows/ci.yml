@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Tests on ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Ubuntu 24.04 LTS (Qt 6.4, Paramiko 2.x) and 26.04 LTS (Qt 6.10, Paramiko 4.x)
+        image: ["ubuntu:24.04", "ubuntu:26.04"]
+    steps:
+      - name: Install the same Ubuntu packages run.sh uses
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates \
+            python3 python3-pyqt6 python3-paramiko qt6-svg-plugins openssh-client
+      - uses: actions/checkout@v4
+      - name: Run the test suite (engine, SFTP, security, headless GUI)
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: python3 -m unittest discover -s tests -v
+
+  lint:
+    name: Security lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck (run.sh, install.sh, tools/)
+        run: shellcheck run.sh install.sh tools/*.sh
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Bandit (Python security scanner)
+        run: |
+          python -m pip install --quiet bandit
+          bandit -r bittwin --severity-level medium --confidence-level medium

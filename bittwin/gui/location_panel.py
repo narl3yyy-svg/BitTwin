@@ -10,7 +10,7 @@ from PyQt6.QtWidgets import (QFileDialog, QFrame, QHBoxLayout, QLabel, QMenu, QP
                              QSizePolicy, QVBoxLayout)
 
 from ..core.location import Location
-from .util import human_size, icon
+from .util import human_size, icon, plain_label, plain_tip
 
 HIDDEN_MOUNTS = ("/boot", "/snap", "/var/snap", "/run/user", "/run/credentials", "/efi")
 
@@ -79,7 +79,7 @@ class LocationPanel(QFrame):
         row.setSpacing(10)
         self.icon_label = QLabel()
         self.icon_label.setFixedSize(34, 34)
-        self.path_label = QLabel()
+        self.path_label = plain_label()
         self.path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.path_label.setMinimumWidth(80)
         self.path_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
@@ -87,7 +87,7 @@ class LocationPanel(QFrame):
         row.addWidget(self.path_label, 1)
         lay.addLayout(row)
 
-        self.meta = QLabel()
+        self.meta = plain_label()
         self.meta.setObjectName("CardMeta")
         lay.addWidget(self.meta)
 
@@ -155,7 +155,7 @@ class LocationPanel(QFrame):
             self.kind_badge.show()
         pm = self.icon_label.pixmap()
         self.icon_label.setVisible(pm is not None and not pm.isNull())
-        self.path_label.setToolTip(self._full)
+        self.path_label.setToolTip(plain_tip(self._full) if self._full else "")
         self.path_label.style().unpolish(self.path_label)
         self.path_label.style().polish(self.path_label)
         self._elide()
@@ -192,7 +192,7 @@ class LocationPanel(QFrame):
                 else icon("drive-harddisk"))
             label = f"{name}    {human_size(free)} free" if total else name
             act = self.drive_menu.addAction(ic, label)
-            act.setToolTip(path)
+            act.setToolTip(plain_tip(path))
             act.triggered.connect(lambda _=False, p=path: self.set_local(p))
         if not self.drive_menu.actions():
             self.drive_menu.addAction("No drives found").setEnabled(False)

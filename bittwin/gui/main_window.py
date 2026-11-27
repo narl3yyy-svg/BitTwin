@@ -24,7 +24,7 @@ from .dialogs import (ConfirmDialog, ResultDialog, SettingsDialog, SFTPDialog, a
 from .location_panel import LocationPanel
 from .plan_model import (C_ACTION, C_LNAME, C_LSIZE, C_LTIME, C_RNAME, C_RSIZE, C_RTIME,
                          PlanFilter, PlanModel)
-from .util import app_icon, human_duration, human_size, icon
+from .util import app_icon, human_duration, human_size, icon, message, plain_label
 from .workers import CompareWorker, SyncWorker
 
 MODE_NAMES = {SyncMode.MIRROR: "Mirror", SyncMode.UPDATE: "Update", SyncMode.TWO_WAY: "Two-way"}
@@ -291,7 +291,7 @@ class MainWindow(QMainWindow):
         lay = QHBoxLayout(w)
         lay.setContentsMargins(20, 10, 20, 10)
         lay.setSpacing(14)
-        self.status = QLabel("Ready")
+        self.status = plain_label("Ready")
         self.status.setObjectName("Muted")
         self.status.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self.progress = QProgressBar()
@@ -522,7 +522,7 @@ class MainWindow(QMainWindow):
             return
         err = self._check_pair()
         if err:
-            QMessageBox.warning(self, "Cannot compare", err)
+            message(self, "warning", "Cannot compare", err)
             return
         opts = Options(**{**self.opts.__dict__, "excludes": list(self.opts.excludes)})
         if content:
@@ -573,6 +573,13 @@ class MainWindow(QMainWindow):
                 self._set_status(f"✓  Already in sync  ·  {len(items):,} items compared {how}")
         else:
             self._set_status(f"Compared {len(items):,} items {how}:  " + "   ·   ".join(bits))
+        if info.get("rejected"):
+            shown = "\n".join(info["rejected"][:15])
+            more = len(info["rejected"]) - 15
+            message(self, "warning", "Unsafe names ignored",
+                    "The server sent file names that could point outside the chosen folder. "
+                    "They were ignored for your safety:\n\n" + shown
+                    + (f"\n… and {more} more" if more > 0 else ""))
         if work == 0 and attention == 0:
             self.filter_btns[PlanFilter.ALL][0].click()
         elif attention and self.opts.mode == SyncMode.TWO_WAY:
@@ -592,7 +599,7 @@ class MainWindow(QMainWindow):
                 self._set_status("Cancelled - server not trusted")
             return
         if isinstance(exc, HostKeyChanged):
-            QMessageBox.critical(self, "Server identity changed", str(exc))
+            message(self, "critical", "Server identity changed", str(exc))
             self._set_status("Refused: server identity changed")
             return
         # an encrypted key with no passphrase in memory (e.g. after a restart)
@@ -603,7 +610,7 @@ class MainWindow(QMainWindow):
                     QTimer.singleShot(0, lambda p=panel, m=str(exc): self._reauth(p, m))
                     return
         self._set_status(f"Error: {exc}")
-        QMessageBox.critical(self, "Something went wrong", str(exc))
+        message(self, "critical", "Something went wrong", str(exc))
 
     def _reauth(self, panel, message):
         if self.open_sftp(panel, message):

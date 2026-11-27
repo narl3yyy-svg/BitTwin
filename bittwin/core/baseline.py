@@ -7,13 +7,12 @@ import hashlib
 import json
 import os
 
-from .log import state_dir
+from .log import private_dir, private_open, state_dir
 
 
 def _path(a: str, b: str) -> str:
     key = hashlib.sha256("\n".join(sorted([a, b])).encode()).hexdigest()[:32]
-    d = os.path.join(state_dir(), "pairs")
-    os.makedirs(d, exist_ok=True)
+    d = private_dir(os.path.join(state_dir(), "pairs"))
     return os.path.join(d, key + ".json")
 
 
@@ -35,7 +34,7 @@ def load(left_uri: str, right_uri: str) -> dict:
 def save(left_uri: str, right_uri: str, entries: dict) -> None:
     path = _path(left_uri, right_uri)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
+    with private_open(tmp, "w") as f:
         json.dump({"version": 1, "left": left_uri, "right": right_uri, "entries": entries}, f)
         f.flush()
         os.fsync(f.fileno())

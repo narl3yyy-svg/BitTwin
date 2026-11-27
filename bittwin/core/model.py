@@ -158,5 +158,9 @@ class VerificationError(SyncError):
     pass
 
 
+class UnsafePath(SyncError):
+    """A path that could escape the chosen folder (bad name or symlinked folder)."""
+
+
 class Cancelled(Exception):
     pass

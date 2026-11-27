@@ -21,7 +21,8 @@ import paramiko  # noqa: E402
 from bittwin.core import session  # noqa: E402
 from bittwin.core.fs_local import LocalFS  # noqa: E402
 from bittwin.core.fs_sftp import (HostKeyChanged, SFTPConfig, SFTPFS,  # noqa: E402
-                                  UnknownHostKey, known_hosts_path, trust_host_key)
+                                  UnknownHostKey, known_hosts_path, load_private_key,
+                                  trust_host_key)
 from bittwin.core.model import Action, CompareMethod, Direction, Options, SyncMode  # noqa: E402
 from sftp_server import TestSFTPServer  # noqa: E402
 
@@ -36,7 +37,7 @@ class SFTPTests(unittest.TestCase):
         cls.key = os.path.join(cls.tmp, "id_ed25519")
         subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", PASS, "-f", cls.key],
                        check=True)
-        pub = paramiko.PKey.from_path(cls.key, PASS.encode())
+        pub = load_private_key(cls.key, PASS)
         cls.remote_root = os.path.join(cls.tmp, "server")
         os.makedirs(os.path.join(cls.remote_root, "data"))
         cls.server = TestSFTPServer(cls.remote_root, pub)

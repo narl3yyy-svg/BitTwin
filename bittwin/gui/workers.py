@@ -51,7 +51,8 @@ class CompareWorker(_Base):
             items = session.compare(lfs, rfs, self.opts, self.cancelled, self.status.emit,
                                     self._hash_progress)
             info = {"free_left": lfs.free_space(), "free_right": rfs.free_space(),
-                    "left": lfs.display, "right": rfs.display}
+                    "left": lfs.display, "right": rfs.display,
+                    "rejected": getattr(lfs, "rejected", []) + getattr(rfs, "rejected", [])}
             self.done.emit(items, info)
         except Cancelled:
             self.failed.emit(Cancelled())

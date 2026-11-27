@@ -319,7 +319,8 @@ class SafetyTests(Base):
     def test_log_records_hashes(self):
         write(self.L, "f.txt", b"abc")
         _, s = self.run_sync()
-        text = open(s.log_path, encoding="utf-8").read()
+        with open(s.log_path, encoding="utf-8") as f:
+            text = f.read()
         self.assertIn(hashlib.sha256(b"abc").hexdigest(), text)
         self.assertIn("VERIFIED", text)
 

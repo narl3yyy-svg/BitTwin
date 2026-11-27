@@ -9,7 +9,9 @@
 Sync folders between internal disks, USB drives and SFTP servers, and know that
 every byte arrived exactly as it left.
 
-![Platform](https://img.shields.io/badge/platform-Kubuntu%20%7C%20Ubuntu%20%7C%20KDE-1d99f3)
+[![CI](https://github.com/narl3yyy-svg/BitTwin/actions/workflows/ci.yml/badge.svg)](https://github.com/narl3yyy-svg/BitTwin/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/narl3yyy-svg/BitTwin/actions/workflows/codeql.yml/badge.svg)](https://github.com/narl3yyy-svg/BitTwin/actions/workflows/codeql.yml)
+![Platform](https://img.shields.io/badge/platform-Kubuntu%20%7C%20Ubuntu%2024.04%2B-1d99f3)
 ![Qt](https://img.shields.io/badge/UI-Qt%206%20(PyQt6)-41cd52)
 ![Verification](https://img.shields.io/badge/verification-SHA--256-3a6df5)
 ![License](https://img.shields.io/badge/license-GPL--3.0-blue)
@@ -65,7 +67,8 @@ telemetry. It only does something when you press a button.
 
 ## Quick start
 
-BitTwin is built for **Kubuntu** (and works on any Ubuntu/Debian system with KDE or GNOME).
+BitTwin is built for **Kubuntu** and is tested automatically on **Ubuntu 24.04 LTS and 26.04 LTS**.
+It works on any Ubuntu/Debian system with KDE or GNOME.
 It uses the Qt and SSH libraries that ship with the distribution, so there's no pip and no
 virtual environment.
 
@@ -223,6 +226,34 @@ Nothing is ever sent anywhere except to the SFTP servers you connect to yourself
 
 ---
 
+## Security & privacy
+
+BitTwin is designed to be safe to run on your own files:
+
+| | |
+|---|---|
+| **Stays in its lane** | Only reads and writes inside the two folders you choose. File names from servers are validated (`/`, `..` and similar tricks are rejected), symbolic links are never followed, and BitTwin refuses to write through a folder that is a symbolic link. |
+| **No phoning home** | No telemetry, no update checks, no accounts, no background service. The only network connections are to SFTP servers you add. |
+| **No root** | Runs as your user. `install.sh` installs into your home folder and **asks first** before using `sudo apt` for missing Ubuntu packages. |
+| **Secrets stay secret** | SSH passphrases and passwords are kept in memory only. Settings, logs and sync history are private to your account (`0700` / `0600`). |
+| **Server identity** | You confirm a new SFTP server's fingerprint once. If it ever changes, BitTwin refuses to connect. |
+| **Safe display** | File names are always shown as plain text, so a crafted name can't inject content into the window. |
+| **Checked on every change** | The [test suite](tests/) (including attack tests: malicious SFTP server, symlink escapes, crafted names) runs on Ubuntu 24.04 and 26.04, along with **CodeQL**, **Bandit** and **ShellCheck**. Results are public in the [Actions tab](https://github.com/narl3yyy-svg/BitTwin/actions). |
+
+Found a security problem? Please report it privately as described in [SECURITY.md](SECURITY.md).
+
+### Verifying a download
+
+Each release comes with a `SHA256SUMS` file. After downloading both files into the same folder:
+
+```bash
+sha256sum -c SHA256SUMS
+```
+
+`OK` means your download is exactly what was published.
+
+---
+
 ## Project layout
 
 ```
@@ -240,7 +271,10 @@ BitTwin/
 │   └── gui/               # PyQt6 interface
 ├── assets/                # icon, desktop entry
 ├── docs/                  # screenshots
-└── tests/                 # engine + SFTP self-tests (with a built-in test SFTP server)
+├── tools/make-release.sh  # builds a release archive + SHA256SUMS
+├── tests/                 # engine, SFTP, security and GUI tests (built-in test SFTP server)
+├── .github/workflows/     # CI (tests on Ubuntu 24.04 + 26.04, Bandit, ShellCheck) and CodeQL
+└── SECURITY.md            # how to report a vulnerability
 ```
 
 Run the tests any time with:

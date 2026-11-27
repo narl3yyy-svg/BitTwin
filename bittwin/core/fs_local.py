@@ -9,7 +9,7 @@ import os
 import stat
 from typing import BinaryIO, Callable, Optional
 
-from .model import Cancelled, Entry, TEMP_SUFFIX
+from .model import Cancelled, Entry, TEMP_SUFFIX, UnsafePath
 
 CHUNK = 1024 * 1024  # 1 MiB
 
@@ -22,6 +22,28 @@ def is_excluded(rel: str, name: str, patterns: list[str]) -> bool:
         if fnmatch.fnmatchcase(name, pat) or fnmatch.fnmatchcase(rel, pat):
             return True
     return False
+
+
+def is_safe_name(name: str) -> bool:
+    """A single path component that cannot climb out of its folder."""
+    return bool(name) and name not in (".", "..") and "/" not in name and "\0" not in name
+
+
+def validate_rel(rel: str) -> None:
+    """Refuse relative paths that are absolute or contain '.', '..' or empty parts."""
+    if rel == "":
+        return
+    if rel.startswith("/") or not all(is_safe_name(p) for p in rel.split("/")):
+        raise UnsafePath(f"Refusing unsafe path: {rel!r}")
+
+
+def ancestors(rel: str):
+    """'a/b/c' -> 'a', 'a/b' (the folders a write to rel passes through)."""
+    parts = rel.split("/")[:-1]
+    cur = ""
+    for p in parts:
+        cur = join_rel(cur, p)
+        yield cur
 
 
 def join_rel(parent: str, name: str) -> str:
@@ -46,6 +68,7 @@ class LocalFS:
 
     def __init__(self, root: str):
         self.root = os.path.abspath(os.path.expanduser(root))
+        self._safe_dirs: set[str] = set()
 
     # ----------------------------------------------------------------- info
     @property
@@ -57,7 +80,29 @@ class LocalFS:
         return "file://" + self.root
 
     def _p(self, rel: str) -> str:
+        validate_rel(rel)
         return os.path.join(self.root, rel) if rel else self.root
+
+    def _guard(self, rel: str) -> None:
+        """Before writing to rel: no folder on the way may be a symbolic link,
+        otherwise a write could land outside the chosen folder."""
+        validate_rel(rel)
+        for d in ancestors(rel):
+            if d in self._safe_dirs:
+                continue
+            try:
+                st = os.lstat(os.path.join(self.root, d))
+            except (FileNotFoundError, NotADirectoryError):
+                return  # the rest does not exist yet; mkdir creates real folders
+            if stat.S_ISLNK(st.st_mode):
+                raise UnsafePath(f"Refusing to write through the symbolic link '{d}'")
+            if not stat.S_ISDIR(st.st_mode):
+                return
+            self._safe_dirs.add(d)
+
+    def _open_nofollow(self, rel: str) -> BinaryIO:
+        fd = os.open(self._p(rel), os.O_RDONLY | os.O_NOFOLLOW)
+        return os.fdopen(fd, "rb", buffering=0)
 
     def check_root(self) -> None:
         if not os.path.isdir(self.root):
@@ -120,14 +165,14 @@ class LocalFS:
 
     # ------------------------------------------------------------ reading
     def open_read(self, rel: str) -> BinaryIO:
-        return open(self._p(rel), "rb", buffering=0)
+        return self._open_nofollow(rel)
 
     def hash_file(self, rel: str, uncached: bool = True, progress: ProgressCB = None,
                   cancel: CancelCB = None) -> tuple[str, int]:
         """SHA-256 of a file read straight from the media. Returns (hex, size)."""
         h = hashlib.sha256()
         total = 0
-        with open(self._p(rel), "rb", buffering=0) as f:
+        with self._open_nofollow(rel) as f:
             if uncached:
                 drop_cache(f.fileno())
             while True:
@@ -147,6 +192,7 @@ class LocalFS:
     # ------------------------------------------------------------ writing
     def create_temp(self, rel: str) -> tuple[str, BinaryIO]:
         tmp = temp_name_for(rel)
+        self._guard(tmp)
         path = self._p(tmp)
         try:
             os.unlink(path)  # stale temp from an interrupted run
@@ -165,7 +211,10 @@ class LocalFS:
             f.close()
 
     def set_attrs(self, rel: str, mtime: float, mode: Optional[int]) -> None:
+        self._guard(rel)
         path = self._p(rel)
+        if os.path.islink(path):
+            raise UnsafePath(f"Refusing to change a symbolic link: {rel}")
         if mode is not None:
             try:
                 os.chmod(path, mode & 0o7777)
@@ -174,11 +223,15 @@ class LocalFS:
         os.utime(path, (mtime, mtime))
 
     def replace(self, src_rel: str, dst_rel: str) -> None:
+        self._guard(src_rel)
+        self._guard(dst_rel)
         os.replace(self._p(src_rel), self._p(dst_rel))
         self._fsync_dir(os.path.dirname(self._p(dst_rel)))
 
     def move(self, src_rel: str, dst_rel: str) -> None:
         """Move within this filesystem, creating parent folders of dst."""
+        self._guard(src_rel)
+        self._guard(dst_rel)
         dst = self._p(dst_rel)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
         os.replace(self._p(src_rel), dst)
@@ -196,9 +249,11 @@ class LocalFS:
             os.close(fd)
 
     def mkdir(self, rel: str) -> None:
+        self._guard(rel + "/x")  # every folder up to and including rel
         os.makedirs(self._p(rel), exist_ok=True)
 
     def remove(self, rel: str) -> None:
+        self._guard(rel)
         os.unlink(self._p(rel))
 
     def remove_temp(self, rel: str) -> None:
@@ -209,6 +264,7 @@ class LocalFS:
 
     def rmdir(self, rel: str) -> bool:
         """Remove an empty directory. Returns False if it is not empty."""
+        self._guard(rel)
         try:
             os.rmdir(self._p(rel))
             return True

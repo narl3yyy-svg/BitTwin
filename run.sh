@@ -38,6 +38,7 @@ check_deps() {
     if command -v apt-get >/dev/null 2>&1 && [ -t 0 ]; then
         read -r -p "  Install them now? [y/N] " ans
         if [[ "$ans" =~ ^[Yy]$ ]]; then
+            # shellcheck disable=SC2086  # word splitting of the package list is intended
             sudo apt-get update && sudo apt-get install -y $APT_PKGS
             return 0
         fi

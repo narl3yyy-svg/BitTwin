@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QDialog,
 from ..core.fs_sftp import HostKeyChanged, SFTPConfig, UnknownHostKey, trust_host_key
 from ..core.model import DEFAULT_EXCLUDES, Action, CompareMethod, Options, PlanItem
 from . import theme
-from .util import human_size, icon
+from .util import esc, human_size, icon, message, plain_label
 from .workers import ConnectWorker
 
 
@@ -25,11 +25,11 @@ def ask_trust_host(parent, exc: UnknownHostKey) -> bool:
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Icon.Question)
     box.setWindowTitle("Confirm server identity")
-    box.setText(f"<b>First connection to {exc.hostname}</b>")
+    box.setText(f"<b>First connection to {esc(exc.hostname)}</b>")
     box.setInformativeText(
         "BitTwin has not seen this server before. Check that the fingerprint below matches "
         "the server's key (on the server run <code>ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub</code>)."
-        f"<br><br>Key type: <b>{exc.key_type}</b><br>Fingerprint:<br><code>{exc.fingerprint}</code>"
+        f"<br><br>Key type: <b>{esc(exc.key_type)}</b><br>Fingerprint:<br><code>{esc(exc.fingerprint)}</code>"
         "<br><br>Trust this server and remember it?")
     box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
     box.button(QMessageBox.StandardButton.Yes).setText("Trust and connect")
@@ -151,7 +151,7 @@ class SFTPDialog(QDialog):
         self.remember.setChecked(True)
         lay.addWidget(self.remember)
 
-        self.msg = QLabel("")
+        self.msg = plain_label("")
         self.msg.setWordWrap(True)
         self.msg.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         lay.addWidget(self.msg)
@@ -276,7 +276,7 @@ class SFTPDialog(QDialog):
                 self._set_msg("Connection cancelled - server not trusted.", "warn")
             return
         if isinstance(exc, HostKeyChanged):
-            QMessageBox.critical(self, "Server identity changed", str(exc))
+            message(self, "critical", "Server identity changed", str(exc))
         self._set_msg(f"✗  {exc}", "danger")
 
     def _accept_ok(self):
@@ -344,7 +344,7 @@ class RemoteFolderDialog(QDialog):
             path = self.fs.sftp.normalize(path)
             entries = self.fs.sftp.listdir_attr(path)
         except IOError as exc:
-            QMessageBox.warning(self, "Cannot open folder", f"{path}\n\n{exc}")
+            message(self, "warning", "Cannot open folder", f"{path}\n\n{exc}")
             return
         self.path = path
         self.where.setText(path)
@@ -366,7 +366,7 @@ class RemoteFolderDialog(QDialog):
             try:
                 self.fs.sftp.mkdir(posixpath.join(self.path, name.strip()))
             except IOError as exc:
-                QMessageBox.warning(self, "Could not create folder", str(exc))
+                message(self, "warning", "Could not create folder", str(exc))
             self._go(self.path)
 
 
@@ -505,8 +505,8 @@ class ConfirmDialog(QDialog):
         t = QLabel(f"Ready to sync  ·  {mode_name}")
         t.setObjectName("SectionTitle")
         lay.addWidget(t)
-        paths = QLabel(f"<span style='color:{c['muted']}'>Left</span>&nbsp;&nbsp;{left_label}<br>"
-                       f"<span style='color:{c['muted']}'>Right</span>&nbsp;{right_label}")
+        paths = QLabel(f"<span style='color:{c['muted']}'>Left</span>&nbsp;&nbsp;{esc(left_label)}<br>"
+                       f"<span style='color:{c['muted']}'>Right</span>&nbsp;{esc(right_label)}")
         paths.setWordWrap(True)
         lay.addWidget(paths)
         lay.addWidget(_hline())

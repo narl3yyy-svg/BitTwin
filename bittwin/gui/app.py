@@ -15,6 +15,11 @@ def main() -> int:
     from .main_window import MainWindow
     from .util import app_icon
 
+    from ..core.fs_sftp import config_dir
+    from ..core.log import state_dir
+    config_dir()  # ~/.config/BitTwin (settings, saved connections, known_hosts) -> 0700
+    state_dir()   # ~/.local/state/BitTwin (logs, sync history) -> 0700
+
     app = QApplication(sys.argv)
     app.setApplicationName("BitTwin")
     app.setOrganizationName("BitTwin")

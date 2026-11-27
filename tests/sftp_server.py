@@ -154,8 +154,9 @@ class _SFTP(SFTPServerInterface):
 
 
 class TestSFTPServer:
-    def __init__(self, root, client_pubkey, username="tester"):
+    def __init__(self, root, client_pubkey, username="tester", sftp_cls=None):
         self.root = root
+        self.sftp_cls = sftp_cls or _SFTP
         self.host_key = paramiko.RSAKey.generate(2048)
         self.client_pubkey = client_pubkey
         self.username = username
@@ -181,7 +182,7 @@ class TestSFTPServer:
         t.add_server_key(self.host_key)
         root = self.root
 
-        class Bound(_SFTP):
+        class Bound(self.sftp_cls):
             ROOT = root
 
         t.set_subsystem_handler("sftp", SFTPServer, Bound)

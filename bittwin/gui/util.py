@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import html
 import os
 import time
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import QLabel, QMessageBox
 
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                       "assets")
@@ -24,6 +27,32 @@ def icon(*names: str) -> QIcon:
         if not ic.isNull():
             return ic
     return QIcon()
+
+
+def esc(text) -> str:
+    """Escape text (file names, server messages) before it goes into rich text."""
+    return html.escape(str(text), quote=True)
+
+
+def plain_tip(text) -> str:
+    """Tooltip that always shows text literally, never as HTML."""
+    return "<p style='white-space:pre'>" + esc(text) + "</p>"
+
+
+def plain_label(text: str = "") -> QLabel:
+    lab = QLabel(text)
+    lab.setTextFormat(Qt.TextFormat.PlainText)
+    return lab
+
+
+def message(parent, kind: str, title: str, text: str) -> None:
+    """Message box whose text is shown literally (it may contain file names)."""
+    icons = {"warning": QMessageBox.Icon.Warning, "critical": QMessageBox.Icon.Critical,
+             "info": QMessageBox.Icon.Information}
+    box = QMessageBox(icons.get(kind, QMessageBox.Icon.Information), title, str(text),
+                      QMessageBox.StandardButton.Ok, parent)
+    box.setTextFormat(Qt.TextFormat.PlainText)
+    box.exec()
 
 
 def human_size(n: float) -> str:

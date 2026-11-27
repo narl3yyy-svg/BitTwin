@@ -25,7 +25,7 @@ from typing import Callable, Optional
 from .fs_local import CHUNK
 from .log import RunLog
 from .model import (ARCHIVE_DIR, Action, Cancelled, Entry, Options, PlanItem,
-                    Summary, SyncError, VerificationError)
+                    Summary, SyncError, UnsafePath, VerificationError)
 
 
 def _write_all(f, buf) -> None:
@@ -137,6 +137,8 @@ class Executor:
             return
         fs = self.fs[side]
         st = fs.stat(parent)
+        if st is not None and st.is_link:
+            raise UnsafePath(f"Destination folder '{parent}' is a symbolic link - skipped for safety")
         if st is not None and not st.is_dir:
             self._discard(side, parent)
             st = None
@@ -248,6 +250,8 @@ class Executor:
         before = sfs.stat(rel)
         if before is None:
             raise SyncError("Source file no longer exists - compare again")
+        if before.is_link:
+            raise UnsafePath("Source is now a symbolic link - skipped for safety")
         if before.is_dir or before.size != entry.size or abs(before.mtime - entry.mtime) > 1e-3:
             raise SyncError("Source file changed since the comparison - compare again")
 

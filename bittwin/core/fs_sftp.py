@@ -14,8 +14,9 @@ from typing import BinaryIO, Callable, Optional
 import paramiko
 from paramiko.sftp import CMD_EXTENDED, CMD_EXTENDED_REPLY
 
-from .fs_local import CHUNK, is_excluded, join_rel, temp_name_for
-from .model import Cancelled, Entry
+from .fs_local import (CHUNK, ancestors, is_excluded, is_safe_name, join_rel, temp_name_for,
+                       validate_rel)
+from .model import Cancelled, Entry, UnsafePath
 
 ProgressCB = Optional[Callable[[int], None]]
 CancelCB = Optional[Callable[[], bool]]
@@ -23,9 +24,8 @@ CancelCB = Optional[Callable[[], bool]]
 
 def config_dir() -> str:
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
-    path = os.path.join(base, "BitTwin")
-    os.makedirs(path, exist_ok=True)
-    return path
+    from .log import private_dir
+    return private_dir(os.path.join(base, "BitTwin"))
 
 
 def known_hosts_path() -> str:
@@ -94,17 +94,30 @@ def load_private_key(path: str, passphrase: str) -> paramiko.PKey:
     path = os.path.expanduser(path)
     if not os.path.isfile(path):
         raise FileNotFoundError(f"Private key file not found: {path}")
-    try:
-        return paramiko.PKey.from_path(path, passphrase.encode() if passphrase else None)
-    except (paramiko.PasswordRequiredException, TypeError) as exc:
-        raise PermissionError("This private key is protected - enter its passphrase.") from exc
-    except paramiko.SSHException as exc:
-        msg = str(exc)
-        if "passphrase" in msg.lower() or "decrypt" in msg.lower() or "padding" in msg.lower():
+    if getattr(paramiko.PKey, "from_path", None) is not None:  # Paramiko 3.2+
+        try:
+            return paramiko.PKey.from_path(path, passphrase.encode() if passphrase else None)
+        except (paramiko.PasswordRequiredException, TypeError) as exc:
+            raise PermissionError("This private key is protected - enter its passphrase.") from exc
+        except paramiko.SSHException as exc:
+            msg = str(exc).lower()
+            if "passphrase" in msg or "decrypt" in msg or "padding" in msg:
+                raise PermissionError("Wrong passphrase for the private key.") from exc
+            raise ValueError(f"Could not read private key: {exc}") from exc
+        except ValueError as exc:
             raise PermissionError("Wrong passphrase for the private key.") from exc
-        raise ValueError(f"Could not read private key: {msg}") from exc
-    except ValueError as exc:
-        raise PermissionError("Wrong passphrase for the private key.") from exc
+    # Older Paramiko: try each key type in turn.
+    last: Exception | None = None
+    for cls in (paramiko.Ed25519Key, paramiko.ECDSAKey, paramiko.RSAKey):
+        try:
+            return cls.from_private_key_file(path, password=passphrase or None)
+        except paramiko.PasswordRequiredException as exc:
+            raise PermissionError("This private key is protected - enter its passphrase.") from exc
+        except (paramiko.SSHException, ValueError) as exc:
+            last = exc
+    if passphrase:
+        raise PermissionError("Wrong passphrase for the private key (or unsupported key type).")
+    raise ValueError(f"Could not read private key: {last}")
 
 
 def connect(cfg: SFTPConfig, timeout: float = 15.0) -> tuple[paramiko.SSHClient, paramiko.SFTPClient]:
@@ -155,6 +168,8 @@ class SFTPFS:
 
     def __init__(self, cfg: SFTPConfig):
         self.cfg = cfg
+        self.rejected: list[str] = []      # unsafe names sent by the server
+        self._safe_dirs: set[str] = set()
         self.client, self.sftp = connect(cfg)
         root = cfg.remote_path or "."
         try:
@@ -172,7 +187,24 @@ class SFTPFS:
         return f"sftp://{self.cfg.username}@{self.cfg.host}:{self.cfg.port}{self.root}"
 
     def _p(self, rel: str) -> str:
+        validate_rel(rel)
         return posixpath.join(self.root, rel) if rel else self.root
+
+    def _guard(self, rel: str) -> None:
+        """No folder on the way to rel may be a symbolic link on the server."""
+        validate_rel(rel)
+        for d in ancestors(rel):
+            if d in self._safe_dirs:
+                continue
+            try:
+                a = self.sftp.lstat(posixpath.join(self.root, d))
+            except IOError:
+                return
+            if stat.S_ISLNK(a.st_mode or 0):
+                raise UnsafePath(f"Refusing to write through the remote symbolic link '{d}'")
+            if not stat.S_ISDIR(a.st_mode or 0):
+                return
+            self._safe_dirs.add(d)
 
     def check_root(self) -> None:
         try:
@@ -226,6 +258,13 @@ class SFTPFS:
                 raise OSError(f"Cannot read remote folder '{self._p(parent)}': {exc}") from exc
             for a in items:
                 name = a.filename
+                if name in (".", ".."):
+                    continue
+                if not is_safe_name(name):
+                    # A well-behaved server never sends these; a malicious one could
+                    # use them to make BitTwin write outside the chosen folder.
+                    self.rejected.append(join_rel(parent, repr(name)))
+                    continue
                 rel = join_rel(parent, name)
                 if is_excluded(rel, name, excludes):
                     continue
@@ -281,6 +320,7 @@ class SFTPFS:
     # ------------------------------------------------------------ writing
     def create_temp(self, rel: str) -> tuple[str, BinaryIO]:
         tmp = temp_name_for(rel)
+        self._guard(tmp)
         path = self._p(tmp)
         try:
             self.sftp.remove(path)
@@ -304,6 +344,7 @@ class SFTPFS:
             f.close()
 
     def set_attrs(self, rel: str, mtime: float, mode: Optional[int]) -> None:
+        self._guard(rel)
         path = self._p(rel)
         if mode is not None:
             try:
@@ -313,6 +354,8 @@ class SFTPFS:
         self.sftp.utime(path, (int(mtime), int(mtime)))
 
     def replace(self, src_rel: str, dst_rel: str) -> None:
+        self._guard(src_rel)
+        self._guard(dst_rel)
         src, dst = self._p(src_rel), self._p(dst_rel)
         try:
             self.sftp.posix_rename(src, dst)
@@ -344,14 +387,18 @@ class SFTPFS:
                     raise
 
     def move(self, src_rel: str, dst_rel: str) -> None:
+        self._guard(src_rel)
+        self._guard(dst_rel)
         dst = self._p(dst_rel)
         self._makedirs(posixpath.dirname(dst))
         self.replace(src_rel, dst_rel)
 
     def mkdir(self, rel: str) -> None:
+        self._guard(rel + "/x")
         self._makedirs(self._p(rel))
 
     def remove(self, rel: str) -> None:
+        self._guard(rel)
         self.sftp.remove(self._p(rel))
 
     def remove_temp(self, rel: str) -> None:
@@ -361,6 +408,7 @@ class SFTPFS:
             pass
 
     def rmdir(self, rel: str) -> bool:
+        self._guard(rel)
         try:
             if self.sftp.listdir(self._p(rel)):
                 return False
