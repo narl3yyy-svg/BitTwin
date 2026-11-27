@@ -74,6 +74,7 @@ ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.ab
 def stylesheet(c: dict) -> str:
     check = os.path.join(ASSETS, "check.svg")
     dot = os.path.join(ASSETS, "dot.svg")
+    chevron = os.path.join(ASSETS, "chevron.svg")
     return f"""
 * {{ outline: none; }}
 QWidget {{ color: {c['text']}; font-size: 10pt; }}
@@ -129,6 +130,11 @@ QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit {{
     padding: 6px 9px; selection-background-color: {c['select']}; }}
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus, QPlainTextEdit:focus {{
     border: 1px solid {c['accent']}; }}
+QComboBox {{ padding-right: 30px; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right; width: 28px;
+    border: none; background: transparent; }}
+QComboBox::down-arrow {{ image: url({chevron}); width: 12px; height: 12px; }}
+QComboBox::down-arrow:on {{ top: 1px; }}
 QComboBox QAbstractItemView {{ background: {c['surface']}; border: 1px solid {c['border']};
     selection-background-color: {c['select']}; padding: 4px; }}
 
