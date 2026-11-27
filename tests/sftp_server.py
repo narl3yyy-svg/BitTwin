@@ -86,7 +86,7 @@ class _SFTP(SFTPServerInterface):
     def open(self, path, flags, attr):
         real = self._real(path)
         try:
-            fd = os.open(real, flags | getattr(os, "O_BINARY", 0), 0o666)
+            fd = os.open(real, flags | getattr(os, "O_BINARY", 0), 0o600)
         except OSError as e:
             return SFTPServer.convert_errno(e.errno)
         if (flags & os.O_CREAT) and attr is not None:
